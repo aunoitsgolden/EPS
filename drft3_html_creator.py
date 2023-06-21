@@ -42,35 +42,30 @@ for page in range(1, pages + 1): # +1 because naturally range begins at 0 (but o
             pass
 
 sorted_items = sorted(items_found.items(), key=lambda x: x[1]['price']) # print(str(sorted_items)) for sorted items
-
-for item in sorted_items:
-    print(f"The item is {item}.")
     
-# html_string = """
-# <!DOCTYPE html>
-# <html>
-#     <head>
-#         <title>Search Query Results</title>
-#     </head>
-#     <body>
-#     <h2>Here are the items you searched for, from least to most expenisve:</h2>
-#         <ul>
-# """
+html_string = """
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Search Query Results</title>
+    </head>
+    <body>
+    <h2>Here are the items you searched for, from least to most expenisve:</h2>
+        <ul>
+"""
 
-# for item in sorted_items: 
-#     html_string += f"""            <li>{item[0]}</li>
-#         <ul>
-#             <li>{f'${item[1]["price"]}'}</li>
-#             <li><a href="{item[1]['link']}">See on Newegg.com</a></li>
-#         </ul>\n""" # must be "\n" for newline, "/n" would just be added to the string
+for item in sorted_items: 
+    html_string += f"""            <li>{item[0]}</li>
+        <ul>
+            <li>{f'${item[1]["price"]}'}</li>
+            <li><a href="{item[1]['link']}">See on Newegg.com</a></li>
+        </ul>\n""" # must be "\n" for newline, "/n" would just be added to the string
 
-# html_string += """
-#         </ul>
-#     </body>
-# </html>
-# """
+html_string += """
+        </ul>
+    </body>
+</html>
+"""
 
-# with open('output.html', 'w') as html_file:
-#     html_file.write(html_string)
-
-
+with open('output.html', 'w') as html_file:
+    html_file.write(html_string)
