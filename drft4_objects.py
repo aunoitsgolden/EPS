@@ -3,60 +3,68 @@ import requests
 import re
 
 # Version 4: Allow the User to search for a singular item off of 3 Different Sites
-# with the option to filter price with a defined range. (x < y < z) y = product
-# 
-# Use classes and basic OOP to create reusable items to encourage development onto
-# other websites.
-
-#--------------Query--------------
-item = str(input("Product Name:"))
-minprice = input("MinPrice:")
-maxprice = input("MaxPrice:")
-
-# Error Handling
-while not minprice.isdigit() and maxprice.isdigit(): 
-    minprice, maxprice = (input("Please enter a valid number:"))
-while minprice == 0:
-    minprice = input("Please enter a value greater than 0 for your minimum:")
-while maxprice > minprice:
-    maxprice = input("Please input a maximum value greater than the minimum price:")
+# headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
 
 items_found = {}
 
-#-------------------Scraper---------------------
-class WebScraper:
-    def __init__(self, url, query):
+class Scraper:
+    def __init__(self, url):
         self.url = url 
-        self.query = query
     
     def fetch_page(self):
-        raise NotImplementedError("Method will be implemented in subclass.")
-            
-    def parse_page(self, html):
-        doc = BeautifulSoup(html, 'html.parser') 
-        return doc 
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+        html = requests.get(self.url, headers=headers)
+        doc = BeautifulSoup(html.text, 'html.parser')    
+        return doc
+    
+    def items(self, doc):
+        raise NotImplementedError()
 
-    def scrape(self): 
-        page_html = self.fetch_page() 
-        parsed_page = self.parse_page(page_html) 
-        return parsed_page 
-
-#----Newegg Scraper----
-class NeweggScraper(WebScraper):
-    def fetch_page(self, page):
-        full_url = f"https://www.newegg.com/p/pl?N=4131&d={item}&LeftPriceRange={minprice}+{maxprice}"
-        response = requests.get(full_url)
-        return response.text 
+#---------Technology-------------    
+class Newegg(Scraper):
+    def items(self, doc):
+        div = doc.find(class_="item-cells-wrap border-cells items-grid-view four-cells expulsion-one-cell")
+        items = div.find_all(string=re.compile(product))
+        for item in items:
+            parent = item.parent
+            if parent.name != "a":
+                continue
         
-        page_text = doc.find(class_="list-tool-pagination-text").strong # We could get rid of this, however currently keeping for possible future use.
-        pages = int(str(page_text).split("/")[-2].split(">")[-1][:-1])
+        link = parent['href']
+        next_parent = item.find_parent(class_="item-container")
+        try:    
+            price = next_parent.find(class_="price-current").find('strong').string
+            items_found[item] = {"price": int(price.replace(",","")), "link": link}
+        except:
+            pass
+         
+class MicroCenter(Scraper):
+    def items(self, doc):
+        return
 
-        for page in range(1, pages + 1): # +1 because naturally range begins at 0 (but our pages do not)  
-            full_url = f"https://www.newegg.com/p/pl?N=4131&d={item}&LeftPriceRange={minprice}+{maxprice}&page={page}"
-            response = requests.get(full_url)
-            return response.text 
-        
-# Creates instance
-ScraperResults = NeweggScraper.parsed_page
-print(ScraperResults)
+#------------Home---------------     
+class HomeDepot(Scraper):
+    def items(self, doc):
+        grid = doc.find(class_="grid")
+        items = grid.find_all(string=re.compile(brand))
+        print(items)
+
+# error handling & explore if query class is a good idea
+brand = str(input("Is there a specific brand you would like to search?"))
+product = str(input("What item would you like to search for?"))
+product_words = product.split()
+HD_product = "%20".join(product_words) if len(product_words) > 1 else product
+
+minprice = input("MinPrice:")
+maxprice = input("MaxPrice:") 
+
+newegg_url = f"https://www.newegg.com/p/pl?N=4131&d={product}&LeftPriceRange={minprice}+{maxprice}"  
+homedepot_url = f"https://www.homedepot.com/s/{HD_product}?NCNI-5&lowerBound={minprice}&upperBound={maxprice}"
+microcenter_url = f"https://www.microcenter.com/search/search_results.aspx?N=&cat=&Ntt=3080&searchButton=search"
+
+# {site}scraper = {scraper}({site}_url, item)
+# doc = {site}scraper.fetch_page()
+# {site}scraper.items(doc)
+
+       
 
