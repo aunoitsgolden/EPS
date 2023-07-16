@@ -161,7 +161,8 @@ class HomeDepot(JSP_Scraper):
             link = (f"https://www.homedepot.com{data['link']}")
 
             price_current = item.find(class_='price-format__main-price')
-            if price_current: price = [span.text for span in price_current.find_all('span')]
+            if price_current: price_str = [span.text for span in price_current.find_all('span')]
+            price = price_str[1] + price_str[2] if price_str else "Error"
             matches[name] = {'Price': price, 'Link': link}
 
 def price_ascending(matches): 
