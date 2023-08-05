@@ -1,0 +1,201 @@
+from selenium import webdriver
+from bs4 import BeautifulSoup
+import time
+import re
+
+class Selenium_Driver():
+    def __init__(self):
+        raise NotImplementedError
+
+    def fetch_page(self): # we'll make this a function at some point, issue is that we need the url to be accessed based on scraper selected
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+
+        time_stamp = time.time()
+        driver = webdriver.Chrome(options=options)
+        driver.get(self.url)
+        print(f"----------- Webdriver loaded. Took {time.time() - time_stamp}s")
+
+        time.sleep(1)
+
+        html = driver.page_source
+        driver.quit()
+        print(f"----------- Webdriver has been quit after {time.time() - time_stamp}s")
+
+        doc = BeautifulSoup(html, 'html.parser')
+        title = doc.title.text
+        print(f"----------- {title}")
+        return doc
+    
+    def search(self):
+        raise NotImplementedError
+    
+    def gather_data(self):
+        raise NotImplementedError
+
+class LCSC_Scraper(Selenium_Driver):
+    def __init__(self):
+        self.url = (f"https://www.lcsc.com/search?q={product}")
+
+    def fetch_page(self):
+        return super().fetch_page()
+    
+    def search(self, doc):
+        counters = {'Keyword Matches': 0, 'Pattern Matches': 0}
+        matches = {}
+
+        items = []
+        items.extend(doc.find_all("tr", attrs={"data-v-3be1a989":""}))
+        for item in items:
+            name_tag = item.find("div", class_="product-intro")
+            if name_tag == None: continue
+            else: name = name_tag.text.strip()
+
+            product_tag = item.find("a", class_="link", href=lambda x: x and "/product-detail/" in x)
+            if product_tag: 
+                product_number = product_tag.text.strip()
+                link = product_tag.get('href')
+            else: raise AttributeError
+            
+            if name and product_number:
+                name_strip = name + product_number
+                
+                if pattern.search(name_strip):  
+                    matches[product_number] =  {'name': name, 'link':link, 'item': item}
+                    counters['Pattern Matches'] += 1  
+
+                key_w = set(name.split())
+                key_w.update(product_number.split())
+
+                if keywords.issubset(key_w): # haven't seen this used yet
+                    matches[product_number] =  {'name': name, 'link': link,'item': item}
+                    counters['Keyword Matches'] += 1
+
+        formatted_counters = '\n'.join("----------- {}: {}".format(k, v) for k, v in counters.items())
+        print(formatted_counters)
+
+        return matches
+
+    def gather_data(self, matches):
+        for product_number, data in matches.items():
+            item = data['item']
+            
+            price_tags = item.find_all("div", class_="price-row")
+            for price_tag in price_tags:
+                cleaned_tag = re.sub('\s+', ' ', (price_tag.text.strip()).replace('US$', ' ').strip())
+                values = cleaned_tag.split()
+                
+                try:
+                    price, qty = values
+                    column_2 = {price:qty}
+                except ValueError: print("Discount Rate Price Tag - HTML Access Issue")
+                
+                try: price = column_2[price]
+                except KeyError: print("Issue Indexing 2nd Price Tag")
+                
+            stock_tag = item.find_all("td", attrs={"data-v-3be1a989":""})[3].text.strip()
+            stock = re.sub('\s+', ' ', stock_tag.replace('\n', ' ').replace('\r', '').strip())
+
+            manufacturer = item.find("a", class_="link", href=lambda x: x and "/brand-detail/" in x).text.strip()
+            
+            matches[product_number] = {'name':data['name'], 'link':data['link'], 'price':float(price), "stock":stock, 'manufacturer':manufacturer}
+            
+def keyword_match(product):
+    product_words = product.split()
+    stop_words = ["for", "and", "the", "an", "a", "from"]
+    keywords = set()
+
+    for word in product_words:
+        if word.lower() not in stop_words: 
+            keywords.add(word)
+    return keywords
+
+def get_product():
+    while True:
+        try:
+            product = str(input("What item would you like to search for? "))
+            if product.strip():
+                return product
+            else: 
+                print("Please enter a valid product name.")
+        except ValueError:
+            print("Invalid input. Please try again.")
+
+def get_price_range():
+    while True: # do we need "while true"?
+        try:
+            lower_limit = float(input("Enter lower limit of price range: "))
+            upper_limit = float(input("Enter upper limit of price range: "))
+            if lower_limit <= upper_limit:
+                return (lower_limit, upper_limit)
+            else:
+                print("Upper limit should be greater than or equal to lower limit. Try again.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+class filter_items():
+    # def stock(results):
+    def by_price(results, price_range):
+        lower_limit, upper_limit = price_range
+        return [result for result in results if lower_limit <= float(result[1]['price']) <= upper_limit]
+
+class sort_items():
+    def price_ascending(some_list): 
+        return sorted(some_list, key=lambda x: float(x[1]['price']))
+
+    def price_descending(some_list): 
+        return sorted(some_list, key=lambda x: float(x[1]['price']), reverse = True)
+
+    def manufacturer_a_to_z(some_list): 
+        return sorted(some_list, key=lambda x: x[1]['manufacturer'])
+
+    def manufacturer_z_to_a(some_list): 
+        return sorted(some_list, key=lambda x: x[1]['manufacturer'], reverse = True)
+
+sort_functions = {
+        "lowhigh": sort_items.price_ascending,
+        "highlow": sort_items.price_descending,
+        "az": sort_items.manufacturer_a_to_z,
+        "za": sort_items.manufacturer_z_to_a
+}
+
+product = get_product()
+selected_site = (input("What site would you like to search? ")).strip().lower()
+sort_select = "".join(input("How would you like to sort your results? (Low-High, High-Low, A-Z, Z-A)").split()).lower()
+
+keywords = keyword_match(product)
+pattern = re.compile('|'.join(keywords), re.IGNORECASE)
+
+class_selection = { 'lcsc': LCSC_Scraper() } # Page loop (search pages above 1) options: selenium, repeated results, get first page 
+selected_class = class_selection.get(selected_site)
+if selected_class: 
+    doc = selected_class.fetch_page()
+    matches = selected_class.search(doc)
+    selected_class.gather_data(matches)
+    results = matches.items()
+else: 
+    raise NotImplementedError
+
+price_range = get_price_range()
+filtered_results = filter_items.by_price(results, price_range)
+sort_method = sort_functions.get(sort_select)
+
+print("-" * 80)
+print("{:<20} {:<30} {:<15} {:<45}".format('Price', 'Stock', 'Manufacturer', 'Product Number | Product Name'))
+print("-" * 80)
+
+if sort_method: 
+    print("----------- Sorted Results:")
+    if filtered_results: sorted_items = sort_method(filtered_results)
+    else: sorted_items = sort_method(results) 
+
+    for items in sorted_items: 
+        price = f"${items[1]['price']}"
+        stock = f"{items[1]['stock']}"
+        product_details = f"{items[0]} | {items[1]['name']}"
+        manufacturer = items[1]['manufacturer']
+        
+        print("{:<20} {:<30} {:<35} {:<45}".format(price, stock, manufacturer, product_details))
+        print(f"Link: https://www.lcsc.com/{items[1]['link']}")
+        print("-" * 80)      
+else: None
