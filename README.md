@@ -18,3 +18,4 @@ Added:
   - More error handling for user inputs
   - Sort alphabetically based on manufactuerer name
   - Prettier UI for Terminal
+  .
