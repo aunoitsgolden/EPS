@@ -60,6 +60,7 @@ class User_Input():
             except ValueError:
                 print("Invalid input. Please try again.")
 
+    @staticmethod
     def user_selectable():
         while True:
             x = input("How many results would you like to view (0 for all)? ")
@@ -87,6 +88,7 @@ def keyword_match(product):
     pattern = re.compile('|'.join(keywords), re.IGNORECASE)
     return pattern
 
+# Scrapers
 class LCSC_Scraper():
 
     def selenium_driver(url, sleep_time):
@@ -136,8 +138,7 @@ class LCSC_Scraper():
             price_tags = item.find_all("div", class_="price-row")
             for price_tag in price_tags:
                 cleaned_tag = re.sub('\s+', ' ', (price_tag.text.strip()).replace('US$', ' ').strip())
-                values = cleaned_tag.split()
-                price = values[1]    
+                price = (cleaned_tag.split())[1]
                 
                 # try: 
                 #     price, qty = values
@@ -145,11 +146,6 @@ class LCSC_Scraper():
                 #     print(value_dictionary)
                 # except ValueError:
                 #     print("Discount rate price tag.")
-
-                # try: 
-                #     price = value_dictionary[price]
-                # except KeyError: 
-                #     continue
 
             stock_tag = item.find_all("td", attrs={"data-v-3be1a989":""})[3].text.strip()
             stock = re.sub('\s+', ' ', stock_tag.replace('\n', ' ').replace('\r', '').strip())
@@ -161,7 +157,7 @@ class LCSC_Scraper():
             matches[product_number] = {'name':data['name'], 'link':data['link'], 'price':price, 'stock':stock, 'manufacturer':manufacturer}
        
         return matches
-    
+   
 # class Newegg():
 
 #     def find_matches(self, doc):
@@ -286,19 +282,34 @@ class LCSC_Scraper():
 #             if price_current: price_str = [span.text for span in price_current.find_all('span')]
 #             price = price_str[1] + price_str[2] if price_str else "Error"
 #             matches[name] = {'Price': price, 'Link': link}
+ 
+def scraper_init(product):
+    site_info = [
+    (LCSC_Scraper, f"https://www.lcsc.com/search?q={product}", 1)
+    ]
 
+    for info in site_info:
+        scraper_class, url, driver_sleep = info
+
+        doc            = scraper_class.selenium_driver(url, driver_sleep)
+        gathered_items = scraper_class.search(doc) 
+        matches        = scraper_class.gather_data(gathered_items)
+        results = matches.items()
+        process_data(results, price_range)
+
+# API
 class Mouser_API():
     
-    def request():
+    def request(product):
         # 1[None] | 2[Rohs] | 4[InStock] | 8[RohsAndInStock]
         x = 4 if stock_opt else 1 
 
         query = {
             "SearchByKeywordRequest": {
                 "keyword": product, 
-                "records": records, # how many records to return
+                "records": records, # 
                 "startingRecord": 0, # where in the recordset to begin
-                "searchOptions": x, 
+                "searchOptions": x, # 4
                 "searchWithYourSignUpLanguage": "true"
             }
         }
@@ -337,9 +348,16 @@ class Mouser_API():
         
         return matches
 
+def api_init(product):
+    data             = Mouser_API.request(product)
+    matches = Mouser_API.gather_data(data)
+    results          = matches.items()
+    process_data(results, price_range)
+
+# Filter
 class Filter_Items():
         
-    def by_price(matches, price_range):
+    def byprice(matches, price_range):
         lower_limit, upper_limit = price_range
         return [item for item in matches if lower_limit <= float(item[1]['price']) <= upper_limit]
 
@@ -388,6 +406,21 @@ class Sort_Items():
             else:
                 print("Invalid choice. Please try again.")
 
+# Fix, remove, or combine the below (keep in mind the init methods have a method of this within them.)
+
+def process_data(init_output, price_range):
+    # print(f"{LCSC/Mouser/Digi/etc...}")
+    sorter = Sort_Items(init_output)
+    choice = Sort_Items.select()
+    sorted_results = sorter.sort_functions[choice](init_output)
+
+    if price_range is None: 
+        results = sorted_results
+    else: 
+        results = Filter_Items.byprice(sorted_results, price_range)
+ 
+    print_ui(results)
+    
 def print_ui(results):
     print("-" * 80)
     print("{:<20} {:<30} {:<15} {:<45}".format('Price', 'Stock', 'Manufacturer', 'Product Number | Product Name'))
@@ -404,38 +437,14 @@ def print_ui(results):
         print(f"Link: https://www.lcsc.com/{link}")
         print("-" * 80)   
 
-def process_data(items, price_range):
-    # print(f"{LCSC/Mouser/Digi/etc...}")
-    sorter = Sort_Items(items)
-    choice = Sort_Items.select()
-    sorted_results = sorter.sort_functions[choice](items)
-
-    if price_range is None: 
-        results = sorted_results
-    else: 
-        results = Filter_Items.by_price(sorted_results, price_range)
-
-    print_ui(results)
-    
-def scraper_init(product):
-    site_info = [
-    (LCSC_Scraper, f"https://www.lcsc.com/search?q={product}", 1)
-    ]
-
-    for info in site_info:
-        scraper_class, url, driver_sleep = info
-
-        doc            = scraper_class.selenium_driver(url, driver_sleep)
-        gathered_items = scraper_class.search(doc) 
-        matches        = scraper_class.gather_data(gathered_items)
-        matches = matches.items()
-        process_data(matches, price_range)
-
-def api_init():
-    data             = Mouser_API.request()
-    gathered_matches = Mouser_API.gather_data(data)
-    matches          = gathered_matches.items()
-    process_data(matches, price_range)
-
 scraper_init(product)
 api_init()
+
+# issues:      stock filter (line 48, 305, & 152)
+#              pagenumber (line 105)
+#              user selectable (64, 310, & create one for scrapers)
+
+# just mouser: records (line 310)
+# goal:        consistent input
+#              consistent output
+
