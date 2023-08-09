@@ -35,7 +35,7 @@ class User_Input():
                     
             except ValueError:
                 print("Invalid input. Please try again.")
-        # requires class for scrapers to read "stock" tag, for API it's easily 1 or 4
+        # requires function within scraper methods to read "stock" tag, for API it's easily 1 or 4
 
     @staticmethod
     def get_price_range():
@@ -53,7 +53,7 @@ class User_Input():
                         print("Upper limit should be greater than or equal to lower limit. Please try again.")
                 
                 elif range_select == 2:
-                    return None
+                    return None, None
                 
                 else:
                     print("Invalid choice. Please enter 1 or 2.")
@@ -62,12 +62,29 @@ class User_Input():
 
     @staticmethod
     def get_user_selectable():
-        not NotImplementedError
+        while True:
+            try:
+                product = int(input("Would you like to limit the amount of items presented? 1[Yes] 2[No]"))
+                if product == 1:
+                    user_selectable = input("How many items would you like to be presented?")
+                    if user_selectable.isdigit():
+                        return int(user_selectable)
+                    else: 
+                        print("Please input a valid integer.")
+                
+                elif product == 2: 
+                    return None
+                
+                else: 
+                    print("Please enter either 1 or 2")
+                    
+            except ValueError:
+                print("Invalid input. Please try again.")
 
     @staticmethod
     def get_sort_method():
         while True:
-            print("How would you like to sort your results? 1 [Low-High], 2 [High-Low], 3 [A-Z], 4 [Z-A]")
+            print("How would you like to sort your results? 1 [Low-High], 2 [High-Low], 3 [A-Z], 4 [Z-A] ")
             
             choice = input().strip()
             if choice in ["1", "2", "3", "4"]: 
@@ -98,7 +115,6 @@ def selenium_driver(url, sleep_time):
     driver.quit()
     
     doc = BeautifulSoup(html, 'html.parser')
-    # page_number = doc.find(class_='v-pagination__item').last_element
 
     return doc
 
@@ -118,7 +134,7 @@ class LCSC_Scraper():
             if product_tag: 
                 product_number = product_tag.text.strip()
                 link_tail = product_tag.get('href')
-                link = f'https://www.lcsc.com/{link_tail}'
+                link = f'https://www.lcsc.com{link_tail}'
             else: raise AttributeError
             
             if name and product_number:
@@ -126,6 +142,12 @@ class LCSC_Scraper():
                 
                 pattern = keyword_match(product)
                 if pattern.search(name_strip):  
+                    original_key = product_number
+                    count = 1
+                    while product_number in matches:
+                        product_number = f"{original_key}({count})"
+                        count += 1
+
                     matches[product_number] =  {'name': name, 'link':link, 'item': item}
         
         return matches
@@ -166,8 +188,7 @@ def scraper_init(_class_, url, sleep_time, stock_option):
     doc            = selenium_driver(url, sleep_time)
     gathered_items = _class_.search(doc) 
     matches        = _class_.gather_data(gathered_items, stock_option)
-    results        = matches.items()
-    return results
+    return matches
 
 class Mouser_API():
     
@@ -175,9 +196,9 @@ class Mouser_API():
         query = {
             "SearchByKeywordRequest": {
                 "keyword": product, 
-                "records": 0, # no. of records to return
-                "startingRecord": 0, # where in recordset to begin
-                "searchOptions": stock_option, # 1[none] 4[InStock] 8[Rohs&4]
+                "records": 0, 
+                "startingRecord": 0,
+                "searchOptions": stock_option,
                 "searchWithYourSignUpLanguage": "true"
             }
         }
@@ -190,26 +211,32 @@ class Mouser_API():
         matches = {}
 
         for part in data['SearchResults']['Parts']:
-            name           = part['Description']
-            product_number = part['ManufacturerPartNumber']
-            link           = part['ProductDetailUrl']
-            life_cycle     = part['LifecycleStatus']
-            stock          = part['Availability']
-            manufacturer   = part['Manufacturer']
+            try: name = part['Description']
+            except: name = "N/A"
+            
+            try: product_number = part['ManufacturerPartNumber']
+            except: product_number = "N/A"
 
-            for prices in part['PriceBreaks']:
-                price_dict = {}
-                price      = float(prices['Price'].replace("$", ""))
-                quantity   = prices['Quantity']
-                
-                price_dict[quantity] = price
-                
-            last_price = list(price_dict.values())[-1]
+            try: link = part['ProductDetailUrl']
+            except: link = "N/A"
+
+            try: life_cycle = part['LifecycleStatus']
+            except: life_cycle = "N/A"
+
+            try: stock = part['Availability']
+            except: stock = "N/A"
+
+            try: manufacturer = part['Manufacturer']
+            except: manufacturer = "N/A"
+            
+            price = 0
+            for price_break in part['PriceBreaks']:
+                price = float(price_break['Price'].replace("$", ""))
 
             matches[product_number] = {
                 'name':name, 
                 'link':link, 
-                'price':last_price, 
+                'price':price, 
                 'stock':stock, 
                 'manufacturer':manufacturer, 
                 'type':f'mouser {life_cycle}'
@@ -220,8 +247,7 @@ class Mouser_API():
 def api_init(product, stock_option):
     data    = Mouser_API.request(product, stock_option)
     matches = Mouser_API.gather_data(data)
-    results = matches.items()
-    return results
+    return matches
 
 class Process_Data:
 
@@ -235,32 +261,51 @@ class Process_Data:
         }
     
     def price_ascending(self, items): 
-        return sorted(items, key=lambda x: float(x[1]['price']))
+        return sorted(items.items(), key=lambda x:float(x[1].get('price', 0)))
 
     def price_descending(self, items): 
-        return sorted(items, key=lambda x: float(x[1]['price']), reverse=True)
+        return sorted(items.items(), key=lambda x:float(x[1].get('price', 0)), reverse=True)
 
     def manufacturer_a_to_z(self, items): 
-        return sorted(items, key=lambda x: x[1]['manufacturer'])
+        return sorted(items.items(), key=lambda x: x[1].get('manufacturer', 0))
 
     def manufacturer_z_to_a(self, items): 
-        return sorted(items, key=lambda x: x[1]['manufacturer'], reverse=True)
+        return sorted(items.items(), key=lambda x: x[1].get('manufacturer', 0), reverse=True)
 
-    def filter_by_price(self):
+    @staticmethod
+    def merge_and_rename(d1, d2):
+        merged_dict = d1.copy()
+
+        for key, value in d2.items():
+            new_key = key
+            count = 1
+            while new_key in merged_dict:
+                new_key = f"{key}({count})"
+                count += 1
+            merged_dict[new_key] = value
+
+        return merged_dict
+
+    def filter_by_price(self, price_range):
         lower_limit, upper_limit = price_range
-
         if not lower_limit and upper_limit:
             return self.items
         
-        index = 0
-        while index < len(self.items):
-            price = float(self.items[index][1]['price'])
+        keys_to_remove = []
 
+        for key, value in self.items.items():
+            try:
+                price = float(value['price'])
+            except (TypeError, ValueError, KeyError):
+                print(f"Couldn't fetch or convert the price for key: {key}")
+                continue
+            
             if (lower_limit and price < lower_limit) or (upper_limit and price > upper_limit):
-                self.items.pop(index)
+                keys_to_remove.append(key)
 
-            else:
-                index += 1
+        for key in keys_to_remove:
+            self.items.pop(key)
+            
         return self.items
     
     def filter_returned_amount(self, user_selectable, items):
@@ -278,14 +323,14 @@ class Process_Data:
 
 # Inputs purely for testing. Will edit for website.
 product = User_Input.get_product()
-stock_selected = User_Input.get_stock_filter # Check 143 in LCSC
+stock_selected = User_Input.get_stock_filter()
 price_range = User_Input.get_price_range()
-user_selectable = User_Input.get_user_selectable() # Not implemented 64
+user_selectable = User_Input.get_user_selectable()
 sort_method = User_Input.get_sort_method()
 
 lcsc_results = scraper_init(LCSC_Scraper, f"https://www.lcsc.com/search?q={product}", 1, stock_selected)
 mouser_results = api_init(product, stock_selected)
-combined_results = lcsc_results + mouser_results
+combined_results = Process_Data.merge_and_rename(lcsc_results, mouser_results)        
 
 processor = Process_Data(combined_results)
 processed_data = processor.process_and_sort(price_range, user_selectable, sort_method)
@@ -297,22 +342,12 @@ print("-" * 80)
 
 for result in processed_data: 
     product_details = f"{result[0]} | {result[1]['name']}"
-    price           = f"${result[1]['price']}"
-    stock           = result[1]['stock']
-    manufacturer    = result[1]['manufacturer']
-    link            = result[1]['link']
-    type            = result[1]['type']
+    price           = f"${result[1].get('price', 'N/A')}"
+    stock           = result[1].get('stock', 'N/A')
+    manufacturer    = result[1].get('manufacturer', 'N/A')
+    link            = result[1].get('link', 'N/A')
+    type            = result[1].get('type', 'N/A')
 
     print("{:<20} {:<30} {:<35} {:<45} {:<10}".format(price, stock, manufacturer, product_details, type))
     print(f"Link: {link}")
     print("-" * 80)   
-
-# pagenumber & loop THIRD
-# lcsc: line 101
-
-# publish on github
-# Digkey Scraper FORTH
-
-# changes:
-# life cycle status added to "mouser" type
-# filter stock within the scraper themselves
