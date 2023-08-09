@@ -30,4 +30,6 @@ In the process of fixing page loop for LCSC.
 
 **Life-Cycle** [Life cycle status added to the end of "mouser" type in dictionary]
 
-**Mid Information** [If a key is not accessable (for whatever reason), the fucntion .get("key", "default_value") will assign that key to it's default value ("N/A")
+**Mid Information** [If a key is not accessable (for whatever reason), it will still include any information found]: With the fucntion .get("key", "default_value") and will assign that key to it's default value ("N/A")
+
+Notes on usability: Using the product_number string as a key limited that amount of options I had when it came to filtering and sorting items. In fact, even the "Mid Information" change is because of this fact.
