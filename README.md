@@ -20,6 +20,9 @@ Added:
   - Prettier UI for Terminal
 
 Scraper:
-Life cycle status added to "mouser" type.
-Filters stock within the scraper themselves.
-Never overwrite keys with the same key, even in the combined dictionary.
+In the process of fixing page loop for LCSC.
+**Filtering _Redefined_** [When filtering by price, we flag the key of the item that is outside that price range, and with that flag we delete the key] This is important, as you can not delete items in the dictionary while iterating through that same dictionary.
+**Exclude Items Out-Of-Stock Within Class** [Check for whether an item is in stock or not when finding the stock tag]
+**No Key Left Behind** [Never overwrite keys with the same key, even in the combined dictionary]: If keys in the item dictionary are identical (as they might be with "LM324" as the key), a number will be added to the end of the key to show that it's another item, like files on your device. This happens twice: 1st within the class the items are being found and 2nd within the process_data class when both dictionaries are being combined.
+**Life-Cycle** [Life cycle status added to the end of "mouser" type in dictionary]
+**Mid Information** [If a key is not accessable (for whatever reason), the fucntion .get("key", "default_value") will assign that key to it's default value ("N/A")
