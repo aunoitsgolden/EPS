@@ -18,4 +18,8 @@ Added:
   - More error handling for user inputs
   - Sort alphabetically based on manufactuerer name
   - Prettier UI for Terminal
-  .
+
+Scraper:
+Life cycle status added to "mouser" type
+Filters stock within the scraper themselves
+Never overwrite keys with the same key, even in the combined dictionary
