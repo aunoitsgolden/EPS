@@ -1,4 +1,4 @@
-# WebScraper
+# Electronic Parts Scraper
 Draft 2:
 Scrapes and parses the HTML on a Newegg search site, based on the user's input, and prints out each item inside the terminal.
 
